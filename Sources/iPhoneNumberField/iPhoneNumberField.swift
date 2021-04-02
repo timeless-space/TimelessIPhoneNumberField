@@ -163,6 +163,13 @@ public struct iPhoneNumberField: UIViewRepresentable {
     }
 
     public func updateUIView(_ uiView: PhoneNumberTextField, context: UIViewRepresentableContext<Self>) {
+        let currentHashString = uiView.currentRegion
+        guard context.coordinator.hashString != currentHashString else {
+            // Avoid the phone number text field rebuild multiple times which trigger some weird behavior (example: could not dismiss the keyboard while showing the country picker)
+            return
+        }
+        context.coordinator.hashString = currentHashString
+
         configuration(uiView)
         
         uiView.text = displayedText
@@ -200,8 +207,7 @@ public struct iPhoneNumberField: UIViewRepresentable {
     }
 
     public func makeCoordinator() -> Coordinator {
-        Coordinator(
-            text: $text,
+        Coordinator(text: $text,
                     displayedText: $displayedText,
                     isFirstResponder: externalIsFirstResponder ?? $internalIsFirstResponder,
                     formatted: formatted,
@@ -226,6 +232,7 @@ public struct iPhoneNumberField: UIViewRepresentable {
             onClear: @escaping (PhoneNumberTextField) -> () = { (view: PhoneNumberTextField) in },
             onReturn: @escaping (PhoneNumberTextField) -> () = { (view: PhoneNumberTextField) in } )
         {
+            self.hashString = "_pendingForTheFirstTimeSetup"
             self.text = text
             self.displayedText = displayedText
             self.isFirstResponder = isFirstResponder
@@ -238,6 +245,7 @@ public struct iPhoneNumberField: UIViewRepresentable {
             self.onReturn = onReturn
         }
 
+        var hashString: String
         var text: Binding<String>
         var displayedText: Binding<String>
         var isFirstResponder: Binding<Bool>
@@ -258,36 +266,50 @@ public struct iPhoneNumberField: UIViewRepresentable {
             // Updating the binding
             if formatted {
                 // Display the text exactly if unformatted
-                text.wrappedValue = textField.text ?? ""
+                safeUpdateStateValue { [weak self] in
+                    self?.text.wrappedValue = textField.text ?? ""
+                }
             } else {
                 if let number = textField.phoneNumber {
                     // If we have a valid number, update the binding
                     let country = String(number.countryCode)
                     let nationalNumber = String(number.nationalNumber)
-                    text.wrappedValue = "+" + country + nationalNumber
+                    safeUpdateStateValue { [weak self] in
+                        self?.text.wrappedValue = "+" + country + nationalNumber
+                    }
                 } else {
                     // Otherwise, maintain an empty string
-                    text.wrappedValue = ""
+                    safeUpdateStateValue { [weak self] in
+                        self?.text.wrappedValue = ""
+                    }
                 }
             }
-            
-            displayedText.wrappedValue = textField.text ?? ""
+
+            safeUpdateStateValue { [weak self] in
+                self?.displayedText.wrappedValue = textField.text ?? ""
+            }
             onEditingChange(textField)
             onPhoneNumberChange(textField.phoneNumber)
         }
 
         public func textFieldDidBeginEditing(_ textField: UITextField) {
-            isFirstResponder.wrappedValue = true
+            safeUpdateStateValue { [weak self] in
+                self?.isFirstResponder.wrappedValue = true
+            }
             onBeginEditing(textField as! PhoneNumberTextField)
         }
 
         public func textFieldDidEndEditing(_ textField: UITextField) {
-            isFirstResponder.wrappedValue = false
+            safeUpdateStateValue { [weak self] in
+                self?.isFirstResponder.wrappedValue = false
+            }
             onEndEditing(textField as! PhoneNumberTextField)
         }
         
         public func textFieldShouldClear(_ textField: UITextField) -> Bool {
-            displayedText.wrappedValue = ""
+            safeUpdateStateValue { [weak self] in
+                self?.displayedText.wrappedValue = ""
+            }
             onClear(textField as! PhoneNumberTextField)
             return true
         }
@@ -295,6 +317,13 @@ public struct iPhoneNumberField: UIViewRepresentable {
         public func textFieldShouldReturn(_ textField: UITextField) -> Bool {
             onReturn(textField as! PhoneNumberTextField)
             return true
+        }
+
+        public func safeUpdateStateValue(_ updateBlock: @escaping () -> Void) {
+            // Avoid modifying state during the view is updating
+            DispatchQueue.main.async {
+                updateBlock()
+            }
         }
     }
 }
