@@ -8,7 +8,7 @@
 
 Pod::Spec.new do |s|
     s.name             = 'TimelessIPhoneNumberField'
-    s.version          = '0.6.1-t1'
+    s.version          = '0.6.1-t2'
     s.summary          = 'Format phone numbers as they\'re typed—entirely in SwiftUI'
     
     s.homepage         = 'https://github.com/timeless-space/TimelessIPhoneNumberField.git'
@@ -19,7 +19,8 @@ Pod::Spec.new do |s|
     s.ios.deployment_target = '14.0'
   
     s.source_files = 'Sources/**/*.swift'
-  
+
+    s.weak_frameworks = 'SwiftUI'
     s.dependency 'PhoneNumberKit', '3.3.3'
     s.swift_versions = ['5.0', '5.1']
 end
